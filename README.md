@@ -28,8 +28,8 @@ Question: Store your data on your desktop and try to load the data and copy the 
 library(lavaan)
 library(semTools)
 library(GPArotation)
-HolzingerSwineford1939
-unrotated <- efaUnrotate(HolzingerSwineford1939, nf=3, varList=paste0("x", 1:9), estimator="ml")
+HolzingerSwineford1939$ageyr[4:20] = NA
+unrotated <- efaUnrotate(HolzingerSwineford1939, nf=3, varList=paste0("x", 1:9), estimator="mlr", missing = "ML")
 summary(unrotated, std=TRUE)
 inspect(unrotated, "std")
 # Rotated by Quartimin
