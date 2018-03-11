@@ -28,13 +28,21 @@ Question: Store your data on your desktop and try to load the data and copy the 
 library(lavaan)
 library(semTools)
 library(GPArotation)
-HolzingerSwineford1939
-unrotated <- efaUnrotate(HolzingerSwineford1939, nf=3, varList=paste0("x", 1:9), estimator="ml")
+test = HolzingerSwineford1939
+test$ageyr[4:20] = NA
+test$school[30:50] = NA
+test$grade[20:60] = NA
+unrotatedTest <- efaUnrotate(test, nf=3, varList=paste0("x", 1:9), estimator="mlr", missing = "ML")
+summary(unrotatedTest, std=TRUE)
+inspect(unrotatedTest, "std")
+
+unrotated <- efaUnrotate(HolzingerSwineford1939, nf=3, varList=paste0("x", 1:9), estimator="mlr")
 summary(unrotated, std=TRUE)
-inspect(unrotated, "std")
+
+
 # Rotated by Quartimin
-rotated <- oblqRotate(unrotated, method="quartimin")
-summary(rotated)
+rotatedTest <- oblqRotate(unrotatedTest, method="quartimin")
+summary(rotatedTest)
 
 ```
 
