@@ -1,40 +1,47 @@
 ---
-title: "Test1"
+title: "CCPEBaseline"
 output: html_document
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
-Need to explain how to download R, RStudio, and RMarkdown.
-
-Creating fake data
-```{r}
-id = 1:10000
-genderSamp = c("Male", "Female", "Other_Identity")
-ethSamp = c("White", "African_American", "Asian", "Hispanic", "Other_Ethnic_Identity")
-SESSamp = c("Very_Low", "Low", "Middle", "High")
-set.seed(12345)
-preScore = abs(rnorm(10000, 50, 10))
-postScore = abs(rnorm(10000, 60, 10))
-dat = data.frame(id, Gender = sample(genderSamp, 10000, replace = TRUE, prob = c(.40, .30, .30)), Ethnicity = sample(ethSamp, 10000, replace = TRUE, prob = c(rep(.2, 5))), SES = sample(SESSamp, 10000, replace = TRUE, prob = c(rep(.25, 4))), preScore = round(preScore, 0), postScore = round(postScore, 0)); dat
-
-write.csv(dat, "dat.csv", row.names = FALSE)
-```
-Here we want to load data.  I have provided a csv file called dat.csv.  You can click on session, then set working directory and select the location of where you data is stored.  For example, I have stored by data on google drive so I will use the 
-
-Question: Store your data on your desktop and try to load the data and copy the code into the 
+Get the data clean.  Change the ones you know and let the rest be the same then look at the range of values  
 ```{r}
 library(lavaan)
-library(semTools)
-library(GPArotation)
-HolzingerSwineford1939
-unrotated <- efaUnrotate(HolzingerSwineford1939, nf=3, varList=paste0("x", 1:9), estimator="ml")
-summary(unrotated, std=TRUE)
-inspect(unrotated, "std")
-# Rotated by Quartimin
-rotated <- oblqRotate(unrotated, method="quartimin")
-summary(rotated)
+setwd("S:/Indiana Research & Evaluation/Matthew Hanauer/RCS/Data")
+dat = read.csv("AAC_RCS_Intake_Clean.csv", header = TRUE)
+head(dat)
+itemsOnly = dat[,26:60]
+head(itemsOnly)
+dim(itemsOnly)
+itemsOnly = na.omit(itemsOnly)
+dim(itemsOnly)
+library(psych)
+levels(itemsOnly$V2)
+
+itemsOnly = data.frame(apply(itemsOnly, 2, function(x){ifelse(x == "Strongly Agree", 5,ifelse(x == "Agree", 4,ifelse(x == "Sometimes", 3, ifelse(x == "Disagree", 2, ifelse(x == "Strongly Disagree",1, x)))))}))
+
+itemsOnly = data.frame(apply(itemsOnly, 2, function(x){ifelse(x == "Don't Know", -99, ifelse(x == "Not Applicable", -99, ifelse(x == "Refused", -99, x)))}))
+
+
+levels(itemsOnlyTest$V1)
+```
+Let us just try it with one construct
+```{r}
+model1 = 'RCS =~ V1+V2+V3+V4+V5+V6+V7+V8+V9+V10+V11+V12+V13+V14+V15+V16+V17+V18+V19+V20+V21+V22+V23+V24+V25+V26+V27+V28+V29+V30+V31+V32+V33+V34+V35'
+
+fit1 = cfa(model1, data = itemsOnly, estimator = "MLR")
+
 
 ```
+
+
+
+Figure out which items might go with which construct
+
+Try with four constructs
+
+Try with one construct
+
 
