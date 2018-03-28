@@ -1,40 +1,55 @@
 ---
-title: "Test1"
+title: "CCPEBaseline"
 output: html_document
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
-Need to explain how to download R, RStudio, and RMarkdown.
+Get the data clean.  Change the ones you know and let the rest be the same then look at the range of values
 
-Creating fake data
-```{r}
-id = 1:10000
-genderSamp = c("Male", "Female", "Other_Identity")
-ethSamp = c("White", "African_American", "Asian", "Hispanic", "Other_Ethnic_Identity")
-SESSamp = c("Very_Low", "Low", "Middle", "High")
-set.seed(12345)
-preScore = abs(rnorm(10000, 50, 10))
-postScore = abs(rnorm(10000, 60, 10))
-dat = data.frame(id, Gender = sample(genderSamp, 10000, replace = TRUE, prob = c(.40, .30, .30)), Ethnicity = sample(ethSamp, 10000, replace = TRUE, prob = c(rep(.2, 5))), SES = sample(SESSamp, 10000, replace = TRUE, prob = c(rep(.25, 4))), preScore = round(preScore, 0), postScore = round(postScore, 0)); dat
+The first step is setting the working directory to the location of the data with setwd
+The next step is reading the data, which I do using read.csv.  I use header = TRUE so that the first column in the data is treated as the variable name.
 
-write.csv(dat, "dat.csv", row.names = FALSE)
-```
-Here we want to load data.  I have provided a csv file called dat.csv.  You can click on session, then set working directory and select the location of where you data is stored.  For example, I have stored by data on google drive so I will use the 
+Then I subset the data with only the items, because I only need the items for the analysis, which I call itemsOnly.
 
-Question: Store your data on your desktop and try to load the data and copy the code into the 
+Then I write the itemsOnly dataset as a csv, because I want to reupload.  When I reupload it using read.csv, I can specificy the values that I want to treat as NA. 
+
+Then I go through and change the words (i.e. Strongly Agree, Agree) into numbers.
+
+Finally, I write itemsOnly dataset as a csc and reupload it in order for R to read the values as integers (needed for later analysis below)
 ```{r}
 library(lavaan)
+library(psych)
 library(semTools)
-library(GPArotation)
-HolzingerSwineford1939
-unrotated <- efaUnrotate(HolzingerSwineford1939, nf=3, varList=paste0("x", 1:9), estimator="ml")
-summary(unrotated, std=TRUE)
-inspect(unrotated, "std")
-# Rotated by Quartimin
-rotated <- oblqRotate(unrotated, method="quartimin")
-summary(rotated)
+#setwd("S:/Indiana Research & Evaluation/Matthew Hanauer/RCS/Data")
+#dat = read.csv("AAC_RCS_Intake_Clean.csv", header = TRUE)
+itemsOnly = dat[,26:60]
+write.csv(itemsOnly, "itemsOnly.csv", row.names = FALSE)
+itemsOnly = read.csv("itemsOnly.csv", header= TRUE, na.strings = c("Don't Know", "Not Applicable", "Refused"))
+
+
+itemsOnly = data.frame(apply(itemsOnly, 2, function(x){ifelse(x == "Strongly Agree", 5,ifelse(x == "Agree", 4,ifelse(x == "Sometimes", 3, ifelse(x == "Disagree", 2, ifelse(x == "Strongly Disagree",1, x)))))}))
+
+
+write.csv(itemsOnly, "itemsOnly.csv", row.names = FALSE)
+itemsOnly = read.csv("itemsOnly.csv", header = TRUE)
 
 ```
+Get reliablity
+```{r}
+itemsOnly = itemsOnly[c("V33", "V32", "V27", "V31", "V7", "V29", "V4", "V15", "V21", "V35")]
+dim(itemsOnlyTest)
+alpha(itemsOnly)
+```
+
+Now run EFA
+```{r}
+model1 = 'RCA =~ V33 + V32 + V27 + V31 + V7 + V29 + V4 + V15 + V21 + V35'
+fit1 = cfa(model1, estimator = "MLR", missing = "fiml", std.lv = TRUE, data = itemsOnly)
+summary(fit1, fit.measures = TRUE)
+```
+CFA
+
+
 
