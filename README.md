@@ -92,6 +92,7 @@ levels(as.factor(itemsOnly$G1a..Sexual.Orientation.))
 modelMI4 = measurementInvariance(model1, estimator = "MLR", missing = "fiml", std.lv = TRUE, data = itemsOnly, group = "G1a..Sexual.Orientation.")
 summary(modelMI3, fit.measure = TRUE)
 
+
 ```
 
 
