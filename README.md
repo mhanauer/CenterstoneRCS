@@ -21,6 +21,9 @@ library(lavaan)
 library(psych)
 library(semTools)
 library(dplyr)
+library(ltm)
+library(lordif)
+
 #setwd("S:/Indiana Research & Evaluation/Matthew Hanauer/RCS/Data")
 #dat = read.csv("AAC_RCS_Intake_Clean.csv", header = TRUE)
 head(dat)
@@ -36,61 +39,65 @@ itemsOnly = data.frame(apply(itemsOnly, 2, function(x){ifelse(x == "Strongly Agr
 write.csv(itemsOnly, "itemsOnly.csv", row.names = FALSE)
 itemsOnly = read.csv("itemsOnly.csv", header = TRUE)
 head(itemsOnly)
-
-
 ```
-Here I am getting the reliablity by subsetting only the items in the data set (I don't want to include the demographics in the reliability calculation).  The I use the alpha function which calculates Cronbach's alpha.    
+We have established unidimensionality with CFA.  Now we are doing IRT.  Need to run the graded response model for polytomous items.  
+
+
 ```{r}
+itemsOnlyIRT = itemsOnly[c("V33", "V32", "V27", "V31", "V7", "V29", "V4", "V15", "V21", "V35")]
 
-itemsOnlyAlpha = itemsOnly[c("V33", "V32", "V27", "V31", "V7", "V29", "V4", "V15", "V21", "V35")]
-alpha(itemsOnlyAlpha)
+descript(itemsOnlyIRT)
+fa.parallel(itemsOnlyIRT, fa = "fa")
 
-dim(itemsOnlyAlpha)
-itemsOnlyAlphaNA = na.omit(itemsOnlyAlpha)
-dim(itemsOnlyAlphaNA)
 
-4780/5693
+fitOrd1 = grm(data = itemsOnlyIRT, constrained = TRUE, Hessian  = TRUE)
+fitOrd2 = grm(data = itemsOnlyIRT, Hessian  = TRUE)
+summary(fitOrd2)
 ```
-
-Here we are running the CFA.  We want to create a model that says Recovery Capital equals the following items.  Once we develop the model we can use it in the cfa function, which does the actual CFA analysis.  See the paper for explainations of the additional arugements.
-
-Finally, we want to get a summary of the results so we use the summary function and also ask for additional fit measures
+Now we can do some additional model checking here
 ```{r}
-model1 = 'RCA =~ V33 + V32 + V27 + V31 + V7 + V29 + V4 + V15 + V21 + V35'
-fit1 = cfa(model1, estimator = "MLR", missing = "fiml", std.lv = TRUE, data = itemsOnly)
-summary(fit1, fit.measures = TRUE)
+margins(fitOrd2)
+margins(fitOrd2, type = "three")
+information(fitOrd2, c(-4, 4))
+
+anova(fitOrd1, fitOrd2)
 ```
-Here we are doing the measurement invariance and assess whether the constuct is similar across different demographics.  First, because there are only three people who did not identifty as male or female we excluded them, because that is enough people to have their group.  Then we run the model using the function measurement invariance.  The only new item here is group and that is where you specifcy the grouping variable.
+Try plots here just for fun
 ```{r}
-#Gender
+par(mfrow = c(2, 2))
+
+#plot(fitOrd2, category = 3, lwd = 2, cex = 1.2, legend = TRUE, cx = -4.5, cy = 0.85, xlab = "Latent Trait", cex.main = 1.5, cex.lab = 1.3, cex.axis = 1.1, type = "OCCu")
+
+#Plot all item information functions
+plot(fitOrd2, type = "IIC")
+#Plot just certain information item information is the same for polytomous items see ltm manual
+plot(fitOrd2, items = c(1:2), type = "IIC")
+
+# Plot ICC's for each response category just do one at a time easier
+plot(fitOrd2, items = 3, type = "OCCu")
+
+vals <- plot(fitOrd2, type = "IIC", items = 0, plot = FALSE, zrange = c(-3,3)) 
+
+plot(vals[, "z"], 1 / sqrt(vals[, "test.info"]), type = "l", lwd = 2, xlab = "Ability", ylab = "Standard Error", main = "Standard Error of Measurement")
+```
+Try Dif just for fun
+```{r}
 itemsOnly$G1..Gender. = ifelse(itemsOnly$G1..Gender. == 3, NA, itemsOnly$G1..Gender.)
-count(itemsOnly, "G1..Gender.")
-modelMI1 = measurementInvariance(model1, estimator = "MLR", missing = "fiml", std.lv = TRUE, data = itemsOnly, group = "G1..Gender.")
-summary(modelMI1, fit.measure = TRUE)
+Gender = itemsOnly$G1..Gender.
+# Get rid of small category
+Resp = itemsOnly[c("V33", "V32", "V27", "V31", "V7", "V29", "V4", "V15", "V21", "V35")]
+genderDIF = lordif(Resp, Gender, criterion = "Chisqr", alpha = .01, minCell = 5)
+summary(genderDIF)
+plot(genderDIF)
 
-```
-Model for ethnicity
-```{r}
+# Let's try with race
 itemsOnly$G3..Race. = ifelse(itemsOnly$G3..Race. > 3, 4, itemsOnly$G3..Race.)
-
-modelMI2 = measurementInvariance(model1, estimator = "MLR", missing = "fiml", std.lv = TRUE, data = itemsOnly, group = "G3..Race.")
-summary(modelMI2, fit.measure = TRUE)
-
-```
-Model for age.  We put them into the census bins: 17 and under, 18-24, 25-44, 45-64, 65 and older.  So everyone who is under 18 gets a 1, everyone who is between 18-24 gets a 2 and so one.
-```{r}
-itemsOnly$age = ifelse(itemsOnly$age < 18, 1, ifelse(itemsOnly$age < 25, 2, ifelse(itemsOnly$age < 45,3, ifelse(itemsOnly$age < 65, 4, 5))))
-
-modelMI3 = measurementInvariance(model1, estimator = "MLR", missing = "fiml", std.lv = TRUE, data = itemsOnly, group = "age")
-summary(modelMI3, fit.measure = TRUE)
-
-```
-For the sexual orientation model, to increase power, we created two categories any who is and is not heterosexual.  Therefore, anything greater than 1 (i.e. 2,3,4) become 2's.
-```{r}
-itemsOnly$G1a..Sexual.Orientation. = ifelse(itemsOnly$G1a..Sexual.Orientation.>1, 2,itemsOnly$G1a..Sexual.Orientation.)
-levels(as.factor(itemsOnly$G1a..Sexual.Orientation.))
-modelMI4 = measurementInvariance(model1, estimator = "MLR", missing = "fiml", std.lv = TRUE, data = itemsOnly, group = "G1a..Sexual.Orientation.")
-summary(modelMI3, fit.measure = TRUE)
+Race = itemsOnly$G3..Race.
+# Get rid of small category
+Resp = itemsOnly[c("V33", "V32", "V27", "V31", "V7", "V29", "V4", "V15", "V21", "V35")]
+raceDIF = lordif(Resp, Race, criterion = "Chisqr", alpha = .01, minCell = 5)
+summary(raceDIF)
+plot(raceDIF)
 
 ```
 
