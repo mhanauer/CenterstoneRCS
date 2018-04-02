@@ -69,20 +69,33 @@ ICCS's
 ```{r}
 par(mfrow = c(2, 2))
 
-plot(fitOrd2, category = 1, lwd = 2, cex = 1.2, legend = TRUE, cx = -4.5, cy = 0.85, xlab = "Latent Trait", cex.main = 1.5, cex.lab = 1.3, cex.axis = 1.1)
+#plot(fitOrd2, category = 3, lwd = 2, cex = 1.2, legend = TRUE, cx = -4.5, cy = 0.85, xlab = "Latent Trait", cex.main = 1.5, cex.lab = 1.3, cex.axis = 1.1, type = "OCCu")
 
 #Plot all item information functions
 plot(fitOrd2, type = "IIC")
-#Plot just an overall one
-plot(fitOrd2, items = 0, type = "IIC")
-plot(fitOrd2)
+#Plot just certain information item information is the same for polytomous items see ltm manual
+plot(fitOrd2, items = c(1:2), type = "IIC")
 
+# Plot ICC's for each response category just do one at a time easier
+plot(fitOrd2, items = 1, type = "OCCu")
 ```
-Now time for DIF
+Now time for DIF.  We have lordif, which can allow dif for polytomous resposnes and n-1 categories.  Need to seperate out the category you are interested in and the responses.  Chisqr is the criteria for dif using a particular alpha and must have at least 5 in each cell I think.
+
+When you look at the graphs you can see the p-values wiht model comparision.  Should be 1 versus 2, 1 versus 3 and 2 verus 3
+1v2 = uniform dif, which means no diff among the discrimination (a paramter or slope), but there is a differece in the difficulty (b parameter or intercept).  The shape is the same just a different location.
+2v3 = nonuniform diff means the the same b or intercept theta value, but different slope I believe.
+1v3 = total diff uniform and nonuniform diff
+
 ```{r}
-library(ShinyItemAnalysis)
-
-
+#library(lordif)
+data("Anxiety")
+head(Anxiety)
+dim(Anxiety)
+Age <- Anxiety$age
+Resp <- Anxiety[paste("R", 1:29, sep = "")]
+ageDIF = lordif(Resp, Age, criterion = "Chisqr", alpha = .01, minCell = 5)
+summary(ageDIF)
+plot(ageDIF)
 ```
 
 
