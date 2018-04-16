@@ -1,40 +1,145 @@
 ---
-title: "Test1"
+title: "CCPEBaseline"
 output: html_document
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
-Need to explain how to download R, RStudio, and RMarkdown.
+The first step is setting the working directory to the location of the data with setwd
+The next step is reading the data, which I do using read.csv.  I use header = TRUE so that the first column in the data is treated as the variable name.
 
-Creating fake data
-```{r}
-id = 1:10000
-genderSamp = c("Male", "Female", "Other_Identity")
-ethSamp = c("White", "African_American", "Asian", "Hispanic", "Other_Ethnic_Identity")
-SESSamp = c("Very_Low", "Low", "Middle", "High")
-set.seed(12345)
-preScore = abs(rnorm(10000, 50, 10))
-postScore = abs(rnorm(10000, 60, 10))
-dat = data.frame(id, Gender = sample(genderSamp, 10000, replace = TRUE, prob = c(.40, .30, .30)), Ethnicity = sample(ethSamp, 10000, replace = TRUE, prob = c(rep(.2, 5))), SES = sample(SESSamp, 10000, replace = TRUE, prob = c(rep(.25, 4))), preScore = round(preScore, 0), postScore = round(postScore, 0)); dat
+Then I subset the data with only the items that I want, which are the items and the following demographics: age, gender, ethnicity, sexual orientation.
 
-write.csv(dat, "dat.csv", row.names = FALSE)
-```
-Here we want to load data.  I have provided a csv file called dat.csv.  You can click on session, then set working directory and select the location of where you data is stored.  For example, I have stored by data on google drive so I will use the 
+Then I write the itemsOnly dataset as a csv, because I want to reupload.  When I reupload it using read.csv, I can specificy the values that I want to treat as NA. 
 
-Question: Store your data on your desktop and try to load the data and copy the code into the 
+Then I go through and change the words (i.e. Strongly Agree, Agree) into numbers.
+
+Finally, I write itemsOnly dataset as a csc and reupload it in order for R to read the values as integers (needed for later analysis below).
 ```{r}
 library(lavaan)
+library(psych)
 library(semTools)
-library(GPArotation)
-HolzingerSwineford1939
-unrotated <- efaUnrotate(HolzingerSwineford1939, nf=3, varList=paste0("x", 1:9), estimator="ml")
-summary(unrotated, std=TRUE)
-inspect(unrotated, "std")
-# Rotated by Quartimin
-rotated <- oblqRotate(unrotated, method="quartimin")
-summary(rotated)
+library(dplyr)
+#setwd("S:/Indiana Research & Evaluation/Matthew Hanauer/RCS/Data")
+#dat = read.csv("AAC_RCS_Intake_Clean.csv", header = TRUE)
+head(dat)
+itemsOnly = dat[,c(4, 7:10, 26:60)]
+head(itemsOnly)
+write.csv(itemsOnly, "itemsOnly.csv", row.names = FALSE)
+itemsOnly = read.csv("itemsOnly.csv", header= TRUE, na.strings = c("Don't Know", "Not Applicable", "Refused", "#N/A", "-999", "-888", "-777"))
+
+
+itemsOnly = data.frame(apply(itemsOnly, 2, function(x){ifelse(x == "Strongly Agree", 5,ifelse(x == "Agree", 4,ifelse(x == "Sometimes", 3, ifelse(x == "Disagree", 2, ifelse(x == "Strongly Disagree",1, x)))))}))
+
+
+write.csv(itemsOnly, "itemsOnly.csv", row.names = FALSE)
+itemsOnly = read.csv("itemsOnly.csv", header = TRUE)
+head(itemsOnly)
+
 
 ```
+Here I am getting the reliablity by subsetting only the items in the data set (I don't want to include the demographics in the reliability calculation).  The I use the alpha function which calculates Cronbach's alpha.    
+```{r}
+
+itemsOnlyAlpha = itemsOnly[c("V33", "V32", "V27", "V31", "V7", "V29", "V4", "V15", "V21", "V35")]
+alpha(itemsOnlyAlpha)
+
+dim(itemsOnlyAlpha)
+itemsOnlyAlphaNA = na.omit(itemsOnlyAlpha)
+dim(itemsOnlyAlphaNA)
+
+4780/5693
+```
+
+Here we are running the CFA.  We want to create a model that says Recovery Capital equals the following items.  Once we develop the model we can use it in the cfa function, which does the actual CFA analysis.  See the paper for explainations of the additional arugements.
+
+Finally, we want to get a summary of the results so we use the summary function and also ask for additional fit measures
+```{r}
+model1 = 'RCA =~ V33 + V32 + V27 + V31 + V7 + V29 + V4 + V15 + V21 + V35'
+fit1 = cfa(model1, estimator = "MLR", missing = "fiml", std.lv = TRUE, data = itemsOnly)
+summary(fit1, fit.measures = TRUE)
+```
+Here we are doing the measurement invariance and assess whether the constuct is similar across different demographics.  First, because there are only three people who did not identifty as male or female we excluded them, because that is enough people to have their group.  Then we run the model using the function measurement invariance.  The only new item here is group and that is where you specifcy the grouping variable.
+```{r}
+#Gender
+itemsOnly$G1..Gender. = ifelse(itemsOnly$G1..Gender. == 3, NA, itemsOnly$G1..Gender.)
+count(itemsOnly, "G1..Gender.")
+modelMI1 = measurementInvariance(model1, estimator = "MLR", missing = "fiml", std.lv = TRUE, data = itemsOnly, group = "G1..Gender.")
+summary(modelMI1, fit.measure = TRUE)
+
+```
+Model for ethnicity
+```{r}
+itemsOnly$G3..Race. = ifelse(itemsOnly$G3..Race. > 3, 4, itemsOnly$G3..Race.)
+
+modelMI2 = measurementInvariance(model1, estimator = "MLR", missing = "fiml", std.lv = TRUE, data = itemsOnly, group = "G3..Race.")
+summary(modelMI2, fit.measure = TRUE)
+
+```
+Model for age.  We put them into the census bins: 17 and under, 18-24, 25-44, 45-64, 65 and older.  So everyone who is under 18 gets a 1, everyone who is between 18-24 gets a 2 and so one.
+```{r}
+itemsOnly$age = ifelse(itemsOnly$age < 18, 1, ifelse(itemsOnly$age < 25, 2, ifelse(itemsOnly$age < 45,3, ifelse(itemsOnly$age < 65, 4, 5))))
+
+modelMI3 = measurementInvariance(model1, estimator = "MLR", missing = "fiml", std.lv = TRUE, data = itemsOnly, group = "age")
+summary(modelMI3, fit.measure = TRUE)
+
+```
+For the sexual orientation model, to increase power, we created two categories any who is and is not heterosexual.  Therefore, anything greater than 1 (i.e. 2,3,4) become 2's.
+```{r}
+itemsOnly$G1a..Sexual.Orientation. = ifelse(itemsOnly$G1a..Sexual.Orientation.>1, 2,itemsOnly$G1a..Sexual.Orientation.)
+levels(as.factor(itemsOnly$G1a..Sexual.Orientation.))
+modelMI4 = measurementInvariance(model1, estimator = "MLR", missing = "fiml", std.lv = TRUE, data = itemsOnly, group = "G1a..Sexual.Orientation.")
+summary(modelMI3, fit.measure = TRUE)
+
+
+```
+Here we are going to try some concurrent validity with the PHQ-9
+Need to rename the ID's so that we can merge them
+Then I need to merge them
+Then I need to create total scores
+Then I need to get correlation between total scores of both assessments.
+
+Here getting the id with itemsOnly
+```{r}
+#setwd("S:/Indiana Research & Evaluation/Matthew Hanauer/RCS/Data")
+#datPHQ9 = read.csv("PHQ9 - Intake and Discharge Final - 8-22-17.csv", header = TRUE)
+
+itemsOnly = dat[,c(4, 7:10, 26:60)]
+head(itemsOnly)
+write.csv(itemsOnly, "itemsOnly.csv", row.names = FALSE)
+itemsOnly = read.csv("itemsOnly.csv", header= TRUE, na.strings = c("Don't Know", "Not Applicable", "Refused", "#N/A", "-999", "-888", "-777"))
+
+
+itemsOnly = data.frame(apply(itemsOnly, 2, function(x){ifelse(x == "Strongly Agree", 5,ifelse(x == "Agree", 4,ifelse(x == "Sometimes", 3, ifelse(x == "Disagree", 2, ifelse(x == "Strongly Disagree",1, x)))))}))
+
+itemsOnlyAlpha = itemsOnly[c("V33", "V32", "V27", "V31", "V7", "V29", "V4", "V15", "V21", "V35")]
+
+write.csv(itemsOnlyAlpha, "itemsOnlyAlpha.csv", row.names = FALSE)
+itemsOnlyAlpha = read.csv("itemsOnlyAlpha.csv", header = TRUE)
+
+
+itemsOnlyCon = data.frame(apply(itemsOnlyAlpha, 1, sum))
+colnames(itemsOnlyCon) = c("RCSTotalScore")
+RCSTotalScore = data.frame(itemsOnlyCon, dat$X)
+colnames(RCSTotalScore) = c("RCSTotalScore", "ID")
+head(RCSTotalScore)
+RCSTotalScore
+```
+Now alter ID for PHQ-9 subset and get total score
+```{r}
+datPHQ9Con = data.frame(datPHQ9$Intake.MR.., datPHQ9$Intake.Score)
+colnames(datPHQ9Con) = c("ID", "PHQ9TotalScore")
+concur = merge(datPHQ9Con, RCSTotalScore, all = TRUE)
+dim(concur)
+concur
+sum(is.na(concur))
+
+concur = na.omit(concur)
+dim(concur)
+
+cor.test(concur$PHQ9TotalScore, concur$RCSTotalScore)
+```
+
+
 
