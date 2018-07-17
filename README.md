@@ -110,6 +110,39 @@ Now I am going to get the percentage of missing data for each item using the Ame
 itemsOnlyMissing= amelia(itemsOnly)
 summary(itemsOnlyMissing)
 ```
+Run the model with only complete data
+```{r}
+itemsOnlyAlphaMissing = na.omit(itemsOnlyAlpha)
+
+model1 = 'RCA =~ V33 + V32 + V27 + V31 + V7 + V29 + V4 + V15 + V21 + V35'
+fit1 = cfa(model1, estimator = "MLR", missing = "fiml", std.lv = TRUE, data = itemsOnlyAlphaMissing)
+summary(fit1, fit.measures = TRUE)
+```
+Now I am calcuating a total score for the reviewers.  Need to construct a measure that has NAs in it.
+
+So you cannot calculate a mean with complete data so just getting rid of all missing data will be ok.
+So I want to get get rid of the missing data, because I want the range to be from 10 to 50.  Therefore, I need to calculate the percentage of missing data.
+```{r}
+itemsOnlyAlpha
+
+sum(is.na(itemsOnlyAlpha))
+itemsOnlyAlphaComplete = na.omit(itemsOnlyAlpha)
+
+1-(dim(itemsOnlyAlphaComplete)[1]/dim(itemsOnlyAlpha)[1])
+
+
+
+itemsOnlyAlphaSum = apply(itemsOnlyAlphaComplete, 1, sum, na.rm = TRUE)
+sum(is.na(itemsOnlyAlphaSum))
+round(mean(itemsOnlyAlphaSum),2)
+round(sd(itemsOnlyAlphaSum),2)
+
+range(itemsOnlyAlphaSum)
+
+kurtosi(itemsOnlyAlphaSum)
+
+
+```
 
 
 
@@ -122,6 +155,7 @@ model1 = 'RCA =~ V33 + V32 + V27 + V31 + V7 + V29 + V4 + V15 + V21 + V35'
 fit1 = cfa(model1, estimator = "MLR", missing = "fiml", std.lv = TRUE, data = itemsOnly)
 summary(fit1, fit.measures = TRUE)
 ```
+
 Here we are doing the measurement invariance and assess whether the constuct is similar across different demographics.  First, because there are only three people who did not identifty as male or female we excluded them, because that is enough people to have their group.  Then we run the model using the function measurement invariance.  The only new item here is group and that is where you specifcy the grouping variable.
 ```{r}
 #Gender
