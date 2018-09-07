@@ -6,42 +6,252 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
-Get the data clean.  Change the ones you know and let the rest be the same then look at the range of values  
+The first step is setting the working directory to the location of the data with setwd
+The next step is reading the data, which I do using read.csv.  I use header = TRUE so that the first column in the data is treated as the variable name.
+
+Then I subset the data with only the items that I want, which are the items and the following demographics: age, gender, ethnicity, sexual orientation.
+
+Then I write the itemsOnly dataset as a csv, because I want to reupload.  When I reupload it using read.csv, I can specificy the values that I want to treat as NA. 
+
+Then I go through and change the words (i.e. Strongly Agree, Agree) into numbers.
+
+Finally, I write itemsOnly dataset as a csv and reupload it in order for R to read the values as integers (needed for later analysis below).
+
+I also use the summary function to check if there any other funky numbers (i.e. negative numbers).
+
+Also, I am subetting only the variables that I want to include to ensure that my demographics are based on items that I am including in the sample.  So I don't include all the items just the items in the analysis, which I decided upon by comparing to the BARC
 ```{r}
 library(lavaan)
-setwd("S:/Indiana Research & Evaluation/Matthew Hanauer/RCS/Data")
-dat = read.csv("AAC_RCS_Intake_Clean.csv", header = TRUE)
-head(dat)
-itemsOnly = dat[,26:60]
-head(itemsOnly)
-dim(itemsOnly)
-itemsOnly = na.omit(itemsOnly)
-dim(itemsOnly)
 library(psych)
-levels(itemsOnly$V2)
+library(semTools)
+library(dplyr)
+library(ltm)
+library(prettyR)
+library(semTools)
+library(GPArotation)
+library(Amelia)
+#setwd("S:/Indiana Research & Evaluation/Matthew Hanauer/RCS/Data")
+#dat = read.csv("AAC_RCS_Intake_Clean.csv", header = TRUE)
+head(dat)
+# Grabbing just demographics that I want
+itemsOnly = dat[c(26:60)]
+head(itemsOnlyFull)
+head(itemsOnly)
+
+write.csv(itemsOnlyFull, "itemsOnlyFull.csv", row.names = FALSE)
+itemsOnly = read.csv("itemsOnlyFull.csv", header= TRUE, na.strings = c("Don't Know", "Not Applicable", "Refused", "#N/A", "-999", "-888", "-777"))
+
+summary(itemsOnly)
 
 itemsOnly = data.frame(apply(itemsOnly, 2, function(x){ifelse(x == "Strongly Agree", 5,ifelse(x == "Agree", 4,ifelse(x == "Sometimes", 3, ifelse(x == "Disagree", 2, ifelse(x == "Strongly Disagree",1, x)))))}))
 
-itemsOnly = data.frame(apply(itemsOnly, 2, function(x){ifelse(x == "Don't Know", -99, ifelse(x == "Not Applicable", -99, ifelse(x == "Refused", -99, x)))}))
 
-
-levels(itemsOnlyTest$V1)
+write.csv(itemsOnly, "itemsOnly.csv", row.names = FALSE)
+itemsOnly = read.csv("itemsOnly.csv", header = TRUE)
+head(itemsOnly)
 ```
-Let us just try it with one construct
+Need to get demographics for those with total data.
+Get age on its own, because that is just the mean.  Then get gender, sexual orientation, and race for counts and percentages.
+
+First getting the number of people in the sample with total data and those without total data.  You are fine with the later analysis that does not get rid of data, because you are using fiml, which means you want to include the total set.
+
+We are having 32 be item one and 33 be item 2 and then rest of the item numbers falls into the pattern below (V27 is item three and V31 is item four).
+
 ```{r}
-model1 = 'RCS =~ V1+V2+V3+V4+V5+V6+V7+V8+V9+V10+V11+V12+V13+V14+V15+V16+V17+V18+V19+V20+V21+V22+V23+V24+V25+V26+V27+V28+V29+V30+V31+V32+V33+V34+V35'
+dim(itemsOnly)
+itemsOnlyDescribe = na.omit(itemsOnly)
+dim(itemsOnlyDescribe)
+itemsOnlyDescribe = subset(itemsOnlyDescribe,G1..Gender. <=2)
+dim(itemsOnlyDescribe)
+dim(itemsOnlyDescribe)[1] /dim(itemsOnly)[1]
 
-fit1 = cfa(model1, data = itemsOnly, estimator = "MLR")
+range(itemsOnlyDescribe$age)
+round(mean(itemsOnlyDescribe$age),3)
+round(sd(itemsOnlyDescribe$age),3)
 
+itemsOnlyDescribeDemo = data.frame(Gender = itemsOnlyDescribe$G1..Gender.,Sexual.Orientation =  itemsOnlyDescribe$G1a..Sexual.Orientation., Race = itemsOnlyDescribe$G3..Race.)  
 
+round(describe.factor(itemsOnlyDescribeDemo$Gender),3)
+round(describe.factor(itemsOnlyDescribeDemo$Sexual.Orientation),3)
+round(describe.factor(itemsOnlyDescribeDemo$Race),3)
+
+itemsOnlyDescribeItems = itemsOnlyDescribe[c("V33", "V32", "V27", "V31", "V7", "V29", "V4", "V15", "V21", "V35")]
+
+describe(itemsOnlyDescribeItems)
 ```
 
 
+Here I am getting the reliablity by subsetting only the items in the data set (I don't want to include the demographics in the reliability calculation).  The I use the cronbach.alpha function which calculates Cronbach's alpha.    
+```{r}
+head(itemsOnly)
 
-Figure out which items might go with which construct
+cronbach.alpha(itemsOnly, na.rm = TRUE,CI =TRUE)
+omegaItems = omega(itemsOnly)
+summary(omegaItems)
+```
+Now I am going to run the EFA for the reviewer
+```{r}
+parallel = fa.parallel(itemsOnly, fa= "fa")
+parallel$fa.values
 
-Try with four constructs
+itemsOnlyComplete = na.omit(itemsOnly)
 
-Try with one construct
+unrotated4 <- efaUnrotate(itemsOnlyComplete, nf=4)
+summary(unrotated4, std=TRUE)
+inspect(unrotated4, "std")
+3.22689192/0.40033788 
+
+anova(unrotated1, unrotated4)
+
+```
+Now I am going to get the percentage of missing data for each item using the Amelia package for the reviewer.
+```{r}
+itemsOnlyMissing= amelia(itemsOnly)
+summary(itemsOnlyMissing)
+```
+Run the model with only complete data
+```{r}
+itemsOnlyAlphaMissing = na.omit(itemsOnlyAlpha)
+
+model1 = 'RCS =~ V1+V2+V3+V4+V5+V6+V7+V8+V9+V10+V11+V12+V13+V14+V15+V16+V17+V18+V19+V20+V21+V22+V23+V24+V25+V26+V27+V28+V29+V30+V31+V32+V33+V34+V35'
+fit1 = cfa(model1, estimator = "MLR", missing = "fiml", std.lv = TRUE, data = itemsOnly)
+summary(fit1, fit.measures = TRUE)
+```
+Now I am calcuating a total score for the reviewers.  Need to construct a measure that has NAs in it.
+
+So you cannot calculate a mean with complete data so just getting rid of all missing data will be ok.
+So I want to get get rid of the missing data, because I want the range to be from 10 to 50.  Therefore, I need to calculate the percentage of missing data.
+```{r}
+itemsOnlyAlpha
+
+sum(is.na(itemsOnlyAlpha))
+itemsOnlyAlphaComplete = na.omit(itemsOnlyAlpha)
+
+1-(dim(itemsOnlyAlphaComplete)[1]/dim(itemsOnlyAlpha)[1])
+
+
+
+itemsOnlyAlphaSum = apply(itemsOnlyAlphaComplete, 1, sum, na.rm = TRUE)
+sum(is.na(itemsOnlyAlphaSum))
+round(mean(itemsOnlyAlphaSum),2)
+round(sd(itemsOnlyAlphaSum),2)
+
+range(itemsOnlyAlphaSum)
+
+kurtosi(itemsOnlyAlphaSum)
+
+
+```
+Here we are running the CFA.  We want to create a model that says Recovery Capital equals the following items.  Once we develop the model we can use it in the cfa function, which does the actual CFA analysis.  See the paper for explainations of the additional arugements.
+
+Finally, we want to get a summary of the results so we use the summary function and also ask for additional fit measures
+```{r}
+model1 = 'RCA =~ V33 + V32 + V27 + V31 + V7 + V29 + V4 + V15 + V21 + V35'
+fit1 = cfa(model1, estimator = "MLR", missing = "fiml", std.lv = TRUE, data = itemsOnly)
+summary(fit1, fit.measures = TRUE)
+```
+
+Here we are doing the measurement invariance and assess whether the constuct is similar across different demographics.  First, because there are only three people who did not identifty as male or female we excluded them, because that is enough people to have their group.  Then we run the model using the function measurement invariance.  The only new item here is group and that is where you specifcy the grouping variable.
+```{r}
+#Gender
+itemsOnly$G1..Gender. = ifelse(itemsOnly$G1..Gender. == 3, NA, itemsOnly$G1..Gender.)
+count(itemsOnly, "G1..Gender.")
+modelMI1 = measurementInvariance(model1, estimator = "MLR", missing = "fiml", std.lv = TRUE, data = itemsOnly, group = "G1..Gender.", strict = TRUE)
+summary(modelMI1, fit.measure = TRUE)
+
+```
+Model for white versus black
+```{r}
+itemsOnlyWB = subset(itemsOnly, G3..Race. == 1 | G3..Race. == 2)
+modelMIWB = measurementInvariance(model1, estimator = "MLR", missing = "fiml", std.lv = TRUE, data = itemsOnlyWB, group = "G3..Race.", strict = TRUE)
+summary(modelMIWB, fit.measure = TRUE)
+
+```
+Model for white versus hispanic
+```{r}
+itemsOnlyWH = subset(itemsOnly, G3..Race. == 1 | G3..Race. == 3)
+dim(itemsOnlyWH)
+modelMIWH = measurementInvariance(model1, estimator = "MLR", missing = "fiml", std.lv = TRUE, data = itemsOnlyWH, group = "G3..Race.", strict = TRUE)
+summary(modelMIWH, fit.measure = TRUE)
+```
+Model for white versus other ethnic identity
+```{r}
+itemsOnlyWO = subset(itemsOnly, G3..Race. == 1 | G3..Race. > 3)
+dim(itemsOnlyWO)
+itemsOnlyWO$G3..Race. = ifelse(itemsOnlyWO$G3..Race. > 3, 1, 0)
+dim(itemsOnlyWO)
+modelMIWO = measurementInvariance(model1, estimator = "MLR", missing = "fiml", std.lv = TRUE, data = itemsOnlyWO, group = "G3..Race.", strict = TRUE)
+summary(modelMIWO, fit.measure = TRUE)
+
+```
+For the sexual orientation model, to increase power, we created two categories any who is and is not heterosexual.  Therefore, anything greater than 1 (i.e. 2,3,4) become 2's.
+```{r}
+itemsOnly$G1a..Sexual.Orientation. = ifelse(itemsOnly$G1a..Sexual.Orientation.>1, 2,itemsOnly$G1a..Sexual.Orientation.)
+levels(as.factor(itemsOnly$G1a..Sexual.Orientation.))
+modelMI4 = measurementInvariance(model1, estimator = "MLR", missing = "fiml", std.lv = TRUE, data = itemsOnly, group = "G1a..Sexual.Orientation.", strict = TRUE)
+summary(modelMI4, fit.measure = TRUE)
+
+
+```
+Here we are going to try some concurrent validity with the PHQ-9
+Need to rename the ID's so that we can merge them
+Then I need to merge them
+Then I need to create total scores
+Then I need to get correlation between total scores of both assessments.
+
+Here getting the id with itemsOnly
+```{r}
+
+#setwd("S:/Indiana Research & Evaluation/Matthew Hanauer/RCS/Data")
+#datPHQ9 = read.csv("PHQ9 - Intake and Discharge Final - 8-22-17.csv", header = TRUE)
+
+itemsOnly = dat[,c(4, 7:10, 26:60)]
+head(itemsOnly)
+write.csv(itemsOnly, "itemsOnly.csv", row.names = FALSE)
+itemsOnly = read.csv("itemsOnly.csv", header= TRUE, na.strings = c("Don't Know", "Not Applicable", "Refused", "#N/A", "-999", "-888", "-777"))
+
+
+itemsOnly = data.frame(apply(itemsOnly, 2, function(x){ifelse(x == "Strongly Agree", 5,ifelse(x == "Agree", 4,ifelse(x == "Sometimes", 3, ifelse(x == "Disagree", 2, ifelse(x == "Strongly Disagree",1, x)))))}))
+
+itemsOnlyAlpha = itemsOnly[c("V33", "V32", "V27", "V31", "V7", "V29", "V4", "V15", "V21", "V35")]
+
+write.csv(itemsOnlyAlpha, "itemsOnlyAlpha.csv", row.names = FALSE)
+itemsOnlyAlpha = read.csv("itemsOnlyAlpha.csv", header = TRUE)
+
+
+itemsOnlyCon = data.frame(apply(itemsOnlyAlpha, 1, sum))
+colnames(itemsOnlyCon) = c("RCSTotalScore")
+RCSTotalScore = data.frame(itemsOnlyCon, dat$X)
+colnames(RCSTotalScore) = c("RCSTotalScore", "ID")
+head(RCSTotalScore)
+RCSTotalScore
+```
+Now alter ID for PHQ-9 subset and get total score
+```{r}
+datPHQ9Con = data.frame(datPHQ9$Intake.MR.., datPHQ9$Intake.Score)
+colnames(datPHQ9Con) = c("ID", "PHQ9TotalScore")
+concur = merge(datPHQ9Con, RCSTotalScore, all = TRUE)
+dim(concur)
+concur
+sum(is.na(concur))
+
+concur = na.omit(concur)
+dim(concur)
+
+cor.test(concur$PHQ9TotalScore, concur$RCSTotalScore)
+```
+Ok now trying with the FAD
+```{r}
+setwd("S:/Indiana Research & Evaluation/Matthew Hanauer/RCS/Data")
+datFAD = read.csv("FAD Intake and Discharge Final - 8-23-17.csv", header = TRUE)
+datFAD =  data.frame(datFAD$Intake.MR.., datFAD$Intake)
+colnames(datFAD) = c("ID", "FADTotalScore")
+concurFAD_RCS = merge(RCSTotalScore, datFAD, all = TRUE)
+concurFAD_RCS = na.omit(concurFAD_RCS)
+dim(concurFAD_RCS)
+
+cor.test(concurFAD_RCS$RCSTotalScore, concurFAD_RCS$FADTotalScore)
+```
+
 
 
